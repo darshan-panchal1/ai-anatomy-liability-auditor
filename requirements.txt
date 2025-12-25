@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+groq
+langgraph
+langchain-core
+langchain-mcp-adapters
+fastmcp
+httpx
+python-dotenv
+pydantic
