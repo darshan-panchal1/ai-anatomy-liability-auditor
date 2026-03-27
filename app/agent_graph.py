@@ -84,7 +84,7 @@ async def anatomy_node(state: AuditorState) -> dict:
             "mentioned in this legal/medical query. "
             "Return ONLY the anatomical term — no punctuation, no explanation."
         ),
-        max_tokens=32,
+        max_tokens=512,
     )
     term = term.strip().strip('"').strip("'").split("\n")[0]
     logger.info("[ANATOMY NODE] Extracted term: %s", term)
@@ -138,7 +138,7 @@ async def legal_strategy_node(state: AuditorState) -> dict:
     query = await invoke_groq(
         [HumanMessage(content=prompt)],
         "You are a precise legal search query generator. Output only the query string.",
-        max_tokens=128,
+        max_tokens=512,
     )
     query = query.strip().strip('"').strip("'").split("\n")[0]
     logger.info("[STRATEGY NODE] Legal query: %s", query)
