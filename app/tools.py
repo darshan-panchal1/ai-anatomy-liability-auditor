@@ -1,45 +1,45 @@
 import os
+import asyncio
 import httpx
 from typing import Optional
 
-WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql"
-USER_AGENT = "AnatomyLiabilityAuditor/1.0 (Educational/Research)"
+WIKIDATA_SPARQL    = "https://query.wikidata.org/sparql"
+WIKIDATA_API       = "https://www.wikidata.org/w/api.php"   
+USER_AGENT         = "AnatomyLiabilityAuditor/1.0 (Educational/Research)"
 
 
 async def lookup_anatomical_entity(entity_name: str) -> str:
-    sparql_query = f"""
-    SELECT ?item ?itemLabel ?description WHERE {{
-      SERVICE wikibase:mwapi {{
-        bd:serviceParam wikibase:api "EntitySearch".
-        bd:serviceParam wikibase:endpoint "www.wikidata.org".
-        bd:serviceParam mwapi:search "{entity_name}".
-        bd:serviceParam mwapi:language "en".
-        ?item wikibase:apiOutputItem mwapi:item.
-        ?num wikibase:apiOrdinal true.
-      }}
-      ?item wdt:P31/wdt:P279* wd:Q4936952.
-      ?item schema:description ?description.
-      FILTER(LANG(?description) = "en")
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
-    }} LIMIT 3
     """
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    Uses Wikidata's wbsearchentities REST API instead of SPARQL EntitySearch.
+    Much faster — direct index lookup vs federated SPARQL service call.
+    """
+    params = {
+        "action":   "wbsearchentities",
+        "search":   entity_name,
+        "language": "en",
+        "type":     "item",
+        "limit":    5,
+        "format":   "json",
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             response = await client.get(
-                WIKIDATA_ENDPOINT,
-                params={"query": sparql_query, "format": "json"},
+                WIKIDATA_API,
+                params=params,
                 headers={"User-Agent": USER_AGENT}
             )
             response.raise_for_status()
             data = response.json()
-            bindings = data.get("results", {}).get("bindings", [])
-            if not bindings:
+
+            hits = data.get("search", [])
+            if not hits:
                 return f"No anatomical entities found for '{entity_name}'."
+
             results = []
-            for b in bindings:
-                label = b.get("itemLabel", {}).get("value", "Unknown")
-                qid = b.get("item", {}).get("value", "").split("/")[-1]
-                desc = b.get("description", {}).get("value", "No description")
+            for h in hits[:3]:
+                label = h.get("label", "Unknown")
+                qid   = h.get("id", "")
+                desc  = h.get("description", "No description")
                 results.append(f"- Name: {label} (ID: {qid})\n  Description: {desc}")
             return "\n".join(results)
         except Exception as e:
@@ -62,10 +62,10 @@ async def get_anatomical_connections(qid: str) -> str:
       SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en". }}
     }} LIMIT 20
     """
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             response = await client.get(
-                WIKIDATA_ENDPOINT,
+                WIKIDATA_SPARQL,
                 params={"query": sparql_query, "format": "json"},
                 headers={"User-Agent": USER_AGENT}
             )
