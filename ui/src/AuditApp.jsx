@@ -64,7 +64,9 @@ function parseMarkdown(text) {
 }
 
 /* ─── Data ───────────────────────────────────────────────────────── */
-const API_BASE = import.meta.env.VITE_API_BASE
+const RUNPOD_ENDPOINT_ID = import.meta.env.VITE_RUNPOD_ENDPOINT_ID;
+const RUNPOD_API_KEY     = import.meta.env.VITE_RUNPOD_API_KEY;
+const RUNPOD_URL         = `https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/runsync`;
 
 const EXAMPLES = [
   "A patient suffered a femoral nerve injury during a total hip replacement surgery. The surgeon inadvertently caused traction injury to the femoral nerve during acetabular reaming. The patient now has persistent quadriceps weakness and sensory loss. The surgeon did not specifically discuss femoral nerve injury risk during the informed consent process. Assess potential medical malpractice liability.",
@@ -144,11 +146,15 @@ export default function App() {
   /* ── Health check ── */
   const checkHealth = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3500) });
+      const r = await fetch(`https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/health`, {
+        headers: { "Authorization": `Bearer ${RUNPOD_API_KEY}` },
+        signal: AbortSignal.timeout(3500),
+      });
       if (r.ok) {
         const d = await r.json();
-        setGroqOk(d.groq_configured);
-        setCourtOk(d.courtlistener_configured);
+        const ready = d.workers?.ready >= 0;
+        setGroqOk(ready);
+        setCourtOk(ready);
       } else { setGroqOk(false); setCourtOk(false); }
     } catch { setGroqOk(false); setCourtOk(false); }
   }, []);
@@ -188,19 +194,36 @@ export default function App() {
     });
 
     try {
-      const res = await fetch(`${API_BASE}/audit`, {
+      const res = await fetch(RUNPOD_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${RUNPOD_API_KEY}`,
+        },
+        body: JSON.stringify({ input: { query: query.trim() } }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(typeof err.detail === "object" ? JSON.stringify(err.detail) : err.detail);
       }
       const data = await res.json();
+      if (data.status !== "COMPLETED") {
+        throw new Error(`Job ${data.status}: ${data.error || "Unknown error"}`);
+      }
+      const output = data.output;
+      const normalized = {
+        ...output,
+        duration_ms: data.executionTime,
+        request_id:  data.id,
+        metadata: {
+          ...output.metadata,
+          cases_cited: output.metadata.cases_found_count,
+          legal_query: output.metadata.legal_query_used,
+        },
+      };
       setNodeStates(PIPELINE_NODES.reduce((a, n) => ({ ...a, [n.id]: "done" }), {}));
-      setStatus({ type: "ok", msg: `Complete in ${data.duration_ms}ms · ${data.metadata.cases_cited} case(s) cited` });
-      setResult(data);
+      setStatus({ type: "ok", msg: `Complete in ${normalized.duration_ms}ms · ${normalized.metadata.cases_cited} case(s) cited` });
+      setResult(normalized);
       setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     } catch (err) {
       setNodeStates(PIPELINE_NODES.reduce((a, n) => ({ ...a, [n.id]: "error" }), {}));
@@ -387,7 +410,7 @@ export default function App() {
                 </div>
                 <div style={{ fontFamily: "var(--mono)", fontSize: 12, lineHeight: 1.7,
                               color: "var(--text-muted)", whiteSpace: "pre-wrap" }}>
-                  {error}{"\n\nEnsure the backend is running:\n  python -m app.main\n\nCheck that GROQ_API_KEY and COURTLISTENER_API_KEY are set in .env"}
+                  {error}{"\n\nEnsure the RunPod endpoint is active and VITE_RUNPOD_ENDPOINT_ID / VITE_RUNPOD_API_KEY are set correctly."}
                 </div>
               </div>
             ) : result && (
@@ -471,12 +494,7 @@ export default function App() {
                        textAlign: "center", fontFamily: "var(--mono)", fontSize: 11,
                        color: "var(--text-dim)", letterSpacing: ".05em" }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 24px" }}>
-          Anatomy-of-Liability Auditor &nbsp;·&nbsp; LangGraph + Groq + MCP &nbsp;·&nbsp;
-          {" "}<a href={`${API_BASE}/docs`} target="_blank" rel="noreferrer"
-            style={{ color: "var(--text-dim)", textDecoration: "none" }}
-            onMouseEnter={e => e.target.style.color = "var(--accent)"}
-            onMouseLeave={e => e.target.style.color = "var(--text-dim)"}>API Docs ↗</a>
-          &nbsp;·&nbsp;
+          Anatomy-of-Liability Auditor &nbsp;·&nbsp; LangGraph + Groq + RunPod &nbsp;·&nbsp;
           <a href="https://github.com/darshan-panchal1/ai-anatomy-liability-auditor" target="_blank" rel="noreferrer"
             style={{ color: "var(--text-dim)", textDecoration: "none" }}
             onMouseEnter={e => e.target.style.color = "var(--accent)"}
