@@ -59,7 +59,7 @@ async def invoke_groq(
             formatted.append({"role": "assistant", "content": m.content})
 
     completion = await groq_client.chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model=os.environ.get("GROQ_MODEL"),
         messages=formatted,
         temperature=0.2,
         max_tokens=max_tokens,
