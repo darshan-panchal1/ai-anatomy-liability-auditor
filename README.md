@@ -52,12 +52,11 @@ The UI is hosted on Netlify and connects to the FastAPI backend. No installation
 
 | Capability | Implementation |
 |---|---|
-| Anatomical entity extraction | Groq LLM (llama-3.3-70b) + Wikidata SPARQL |
+| Anatomical entity extraction | Groq LLM (openai/gpt-oss-20b) + Wikidata SPARQL |
 | Ontology resolution | Wikidata Q-IDs via `P361`, `P2789`, `P927` properties |
 | Legal precedent retrieval | CourtListener REST API v4 (Opinions, Precedential) |
 | Structured report synthesis | LLM-generated markdown with 6-section schema |
 | Agent orchestration | LangGraph `StateGraph` with typed state |
-| Tool interoperability | Model Context Protocol (MCP) via stdio transport |
 | Sub-second LLM inference | Groq LPU architecture |
 
 > ⚠️ **Disclaimer:** This system is for educational and research purposes only. Output is not legal advice. Consult a licensed attorney for any legal matter.
@@ -87,7 +86,7 @@ The UI is hosted on Netlify and connects to the FastAPI backend. No installation
 │   │  Node    │   │  Node    │   │  Node    │   │  Node    │     │
 │   └────┬─────┘   └──────────┘   └────┬─────┘   └──────────┘     │
 │        │                             │                          │
-│        ▼  MCP (stdio)                ▼  MCP (stdio)             │
+│        ▼  Direct async call          ▼  Direct async call       │
 │   ┌──────────┐                  ┌─────────────┐                 │
 │   │ Wikidata │                  │CourtListener│                 │
 │   │  Server  │                  │   Server    │                 │
@@ -95,7 +94,7 @@ The UI is hosted on Netlify and connects to the FastAPI backend. No installation
 └─────────────────────────────────────────────────────────────────┘
                              │
                              ▼
-              Groq API (llama-3.3-70b-versatile)
+              Groq API (openai/gpt-oss-20b)
 ```
 
 **Tech stack:**
@@ -105,8 +104,7 @@ The UI is hosted on Netlify and connects to the FastAPI backend. No installation
 | Frontend | React 18, Vite, vanilla CSS-in-JS |
 | Backend | Python 3.8+, FastAPI, Uvicorn |
 | Agent Framework | LangGraph, LangChain Core |
-| LLM Provider | Groq (llama-3.3-70b-versatile) |
-| Tool Protocol | Model Context Protocol (MCP) via FastMCP |
+| LLM Provider | Groq (openai/gpt-oss-20b) |
 | Knowledge Sources | Wikidata SPARQL, CourtListener REST API v4 |
 | Frontend Hosting | Netlify |
 
@@ -149,10 +147,7 @@ ai-anatomy-liability-auditor/
 │   ├── __init__.py
 │   ├── main.py                   # API endpoints, middleware, lifespan
 │   ├── agent_graph.py            # LangGraph state machine
-│   └── servers/
-│       ├── __init__.py
-│       ├── anatomy_server.py     # Wikidata MCP server (SPARQL)
-│       └── legal_server.py       # CourtListener MCP server
+│   └── tools.py                  # Wikidata + CourtListener async tools
 ├── ui/                           # React frontend (Vite)
 │   ├── public/
 │   │   └── vite.svg
@@ -370,7 +365,6 @@ The UI ships with four preloaded example cases accessible via the quick-select b
 | Blank page on Netlify refresh | Missing SPA redirect rule | Add `_redirects` file to `ui/public/` |
 | `No anatomical entities found` | Term not in Wikidata anatomy subclass | Try a more specific or alternative medical term |
 | CourtListener 429 error | Rate limit hit | Wait 60s or upgrade API tier |
-| MCP connection timeout | Subprocess spawn failure | Verify Python path and script permissions |
 | CORS error in browser | Backend missing CORS header | Confirm `allow_origins=["*"]` in `main.py` middleware |
 
 ---
@@ -381,7 +375,6 @@ The UI ships with four preloaded example cases accessible via the quick-select b
 - **Medical accuracy:** Anatomical extraction is probabilistic, not clinically validated
 - **Legal authority:** Generated reports are preliminary analysis, not legal advice
 - **Rate limits:** Free-tier Groq and CourtListener keys have per-minute request caps
-- **MCP transport:** Servers run over stdio — not suitable for horizontal scaling without modification
 
 ---
 
@@ -413,7 +406,6 @@ This is an educational and research project. Issues and pull requests are welcom
 - **[CourtListener / RECAP](https://www.courtlistener.com/)** — public US legal data
 - **[Groq](https://groq.com/)** — high-throughput LPU inference
 - **[LangGraph](https://langchain-ai.github.io/langgraph/)** — agent state machine framework
-- **[FastMCP](https://github.com/jlowin/fastmcp)** — Model Context Protocol server toolkit
 
 ---
 

@@ -89,16 +89,6 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("All API keys detected.")
 
-    from app.agent_graph import get_mcp_client
-    try:
-        await get_mcp_client()
-        logger.info("MCP servers initialised.")
-    except Exception as exc:
-        logger.warning("MCP init warning (non-fatal): %s", exc)
-
-    logger.info("Server ready — http://0.0.0.0:8000")
-    logger.info("=" * 70)
-
     yield
 
     logger.info("Shutting down Anatomy-of-Liability Auditor.")
@@ -164,7 +154,7 @@ async def root():
     return {
         "system":       "Anatomy-of-Liability Auditor",
         "version":      "1.0.0",
-        "architecture": "LangGraph + Groq + MCP (Wikidata + CourtListener)",
+        "architecture": "LangGraph + Groq +(Wikidata + CourtListener)",
         "docs":         "/docs",
     }
 
@@ -245,7 +235,7 @@ async def generate_audit(request: AuditRequest):
             detail={
                 "error":      str(exc),
                 "request_id": request_id,
-                "hint":       "Verify API keys are set and MCP servers are reachable.",
+                "hint":       "Verify API keys are set.",
             },
         )
 

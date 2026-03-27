@@ -4,17 +4,17 @@ LangGraph state machine powering the 4-node analysis pipeline.
 """
 
 import os
-import sys
 import re
 import logging
-from typing import Annotated, TypedDict, List, Optional, Dict
+from typing import Annotated, TypedDict, List
 
 from groq import AsyncGroq
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
-from langchain_core.tools import BaseTool
-from langchain_mcp_adapters.client import MultiServerMCPClient
+
+# Direct imports replacing MCP servers
+from app.tools import lookup_anatomical_entity, get_anatomical_connections, search_liability_precedent
 
 logger = logging.getLogger(__name__)
 
@@ -25,67 +25,6 @@ logger = logging.getLogger(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("CRITICAL: GROQ_API_KEY not found in environment.")
-
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-ANATOMY_SCRIPT = os.path.join(CURRENT_DIR, "servers", "anatomy_server.py")
-LEGAL_SCRIPT   = os.path.join(CURRENT_DIR, "servers", "legal_server.py")
-
-# ---------------------------------------------------------------------------
-# MCP Client — singleton
-# ---------------------------------------------------------------------------
-
-mcp_client: Optional[MultiServerMCPClient] = None
-_tool_cache: Dict[str, Dict[str, BaseTool]] = {}
-
-
-async def get_mcp_client() -> MultiServerMCPClient:
-    global mcp_client
-
-    if mcp_client is None:
-        logger.info("[MCP CLIENT] Initializing MCP client")
-        mcp_client = MultiServerMCPClient(
-            {
-                "anatomy": {
-                    "command": sys.executable,
-                    "args": [ANATOMY_SCRIPT],
-                    "transport": "stdio",
-                    "env": dict(os.environ),
-                },
-                "legal": {
-                    "command": sys.executable,
-                    "args": [LEGAL_SCRIPT],
-                    "transport": "stdio",
-                    "env": dict(os.environ),
-                },
-            }
-        )
-        tools = await mcp_client.get_tools()
-        logger.info("[MCP CLIENT] Available tools: %s", [t.name for t in tools])
-
-    return mcp_client
-
-
-async def invoke_mcp_tool(
-    client: MultiServerMCPClient,
-    server_name: str,
-    tool_name: str,
-    args: dict,
-):
-    """Fetch and cache tools per server, then invoke the requested tool."""
-    if server_name not in _tool_cache:
-        tools = await client.get_tools(server_name=server_name)
-        _tool_cache[server_name] = {t.name: t for t in tools}
-
-    tool = _tool_cache[server_name].get(tool_name)
-    if not tool:
-        available = list(_tool_cache[server_name].keys())
-        raise ValueError(
-            f"Tool '{tool_name}' not found on server '{server_name}'. "
-            f"Available: {available}"
-        )
-
-    return await tool.ainvoke(args)
-
 
 # ---------------------------------------------------------------------------
 # Agent State
@@ -120,7 +59,7 @@ async def invoke_groq(
             formatted.append({"role": "assistant", "content": m.content})
 
     completion = await groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-20b",
         messages=formatted,
         temperature=0.2,
         max_tokens=max_tokens,
@@ -150,24 +89,18 @@ async def anatomy_node(state: AuditorState) -> dict:
     term = term.strip().strip('"').strip("'").split("\n")[0]
     logger.info("[ANATOMY NODE] Extracted term: %s", term)
 
-    client = await get_mcp_client()
-
     try:
-        lookup_result = await invoke_mcp_tool(
-            client, "anatomy", "lookup_anatomical_entity", {"entity_name": term}
-        )
+        lookup_result = await lookup_anatomical_entity(term)
 
         connections = "No structural connections found."
         qid_match = re.search(r"\b(Q\d+)\b", str(lookup_result))
         if qid_match:
             qid = qid_match.group(1)
             logger.info("[ANATOMY NODE] Fetching connections for QID: %s", qid)
-            connections = await invoke_mcp_tool(
-                client, "anatomy", "get_anatomical_connections", {"qid": qid}
-            )
+            connections = await get_anatomical_connections(qid)
 
     except Exception as exc:
-        logger.warning("[ANATOMY NODE] MCP call failed: %s", exc, exc_info=True)
+        logger.warning("[ANATOMY NODE] Tool call failed: %s", exc, exc_info=True)
         lookup_result = f"Wikidata lookup unavailable: {exc}"
         connections = ""
 
@@ -222,17 +155,11 @@ async def legal_strategy_node(state: AuditorState) -> dict:
 
 async def legal_retrieval_node(state: AuditorState) -> dict:
     logger.info("[LEGAL NODE] Retrieving precedents for: %s", state["query_plan"])
-    client = await get_mcp_client()
 
     try:
-        results = await invoke_mcp_tool(
-            client,
-            "legal",
-            "search_liability_precedent",
-            {"query": state["query_plan"]},
-        )
+        results = await search_liability_precedent(state["query_plan"])
     except Exception as exc:
-        logger.warning("[LEGAL NODE] MCP call failed: %s", exc, exc_info=True)
+        logger.warning("[LEGAL NODE] Tool call failed: %s", exc, exc_info=True)
         results = f"Legal search unavailable: {exc}"
 
     return {
