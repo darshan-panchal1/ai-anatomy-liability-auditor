@@ -69,10 +69,10 @@ const RUNPOD_API_KEY     = import.meta.env.VITE_RUNPOD_API_KEY;
 const RUNPOD_URL         = `https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/runsync`;
 
 const EXAMPLES = [
-  "A patient suffered a femoral nerve injury during a total hip replacement surgery. The surgeon inadvertently caused traction injury to the femoral nerve during acetabular reaming. The patient now has persistent quadriceps weakness and sensory loss. The surgeon did not specifically discuss femoral nerve injury risk during the informed consent process. Assess potential medical malpractice liability.",
-  "A patient underwent carpal tunnel release surgery and developed complex regional pain syndrome (CRPS) post-operatively. The surgeon accidentally lacerated the palmar cutaneous branch of the median nerve during the incision. Pre-operative nerve conduction studies were not performed. Evaluate the malpractice exposure and relevant standard of care.",
-  "A 45-year-old patient sustained an iatrogenic spinal cord injury during a lumbar discectomy at L4-L5. The surgeon caused direct trauma to the conus medullaris resulting in lower extremity paralysis. No intraoperative neurophysiological monitoring was used despite it being the standard of care at this facility. Provide a comprehensive liability assessment.",
-  "A general surgeon performed a laparoscopic cholecystectomy and transected the common bile duct, mistaking it for the cystic duct. The patient developed bile peritonitis requiring emergency surgery. The operative note does not document a cholangiogram being performed. Assess the medical malpractice liability exposure including causation and damages.",
+  "A patient developed brachial plexus injury following improper positioning during shoulder arthroscopy. No documentation of positioning precautions or risk disclosure was found. Determine liability exposure.",
+  "During a laparoscopic cholecystectomy, the patient sustained a common bile duct injury due to misidentification of anatomy. The surgeon failed to follow the critical view of safety protocol and did not adequately disclose this risk preoperatively. Evaluate potential medical malpractice liability.",
+  "Post spinal surgery, the patient experienced dural tear leading to CSF leak and neurological deficits. The complication was neither discussed in informed consent nor promptly managed. Assess negligence and standard-of-care deviation.",
+  "A patient suffered a femoral nerve injury during a total hip replacement. The surgeon did not obtain informed consent for this known risk. Assess malpractice liability.",
 ];
 
 const PIPELINE_NODES = [
@@ -347,7 +347,7 @@ export default function App() {
                           display: "flex", alignItems: "center", justifyContent: "space-between",
                           flexWrap: "wrap", gap: 10 }}>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {["Hip replacement nerve", "Carpal tunnel surgery", "Spinal cord injury", "Bile duct transection"]
+                {["Brachial Plexus Injury", "Bile Duct Injury", "Dural Tear Spinal Surgery", "Femoral Nerve Injury"]
                   .map((label, i) => (
                   <button key={i} onClick={() => setQuery(EXAMPLES[i])}
                     style={{ fontFamily: "var(--mono)", fontSize: 10, letterSpacing: ".03em",
